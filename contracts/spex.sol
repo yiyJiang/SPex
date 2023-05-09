@@ -165,6 +165,11 @@ contract SPex {
     function getContractFilecoinAddress() public view returns (CommonTypes.FilAddress memory) {
         return _contractFilecoinAddress;
     }
+    
+    function changeManager(address manager) public {
+        require(msg.sender == _manager, "Must manager can change");
+        _manager = manager;
+    }
 
     function changeFeeTo(address payable newFeeTo) public {
         require(msg.sender == _manager, "Must manager can change");
