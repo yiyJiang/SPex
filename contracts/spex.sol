@@ -11,6 +11,7 @@ import "@zondax/filecoin-solidity/contracts/v0.8/types/CommonTypes.sol";
 
 import "@zondax/filecoin-solidity/contracts/v0.8/PrecompilesAPI.sol";
 
+//import "@zondax/filecoin-solidity/contracts/v0.8/utils/FilAddresses.sol";
 
 
 import "./utils/Validator.sol";
@@ -46,14 +47,15 @@ contract SPex {
     address payable _feeTo;
     address _manager;
     uint256 _feeRate;
-    uint256 constant _feeRateUnit = 10000;
+    uint256 constant FEE_RATE_UNIT = 10000;
     CommonTypes.FilAddress _contractFilecoinAddress;
 
     constructor(address manager, address payable feeTo, uint256 feeRate) {
-        require(feeRate < _feeRateUnit, "feeRate must less _feeRateUnit");
+        require(feeRate < FEE_RATE_UNIT, "feeRate must less FEE_RATE_UNIT");
         _manager = manager;
         _feeTo = feeTo;
         _feeRate = feeRate;
+        //_contractFilecoinAddress = FilAddresses.fromEthAddress(address(this));
     }
 
     /// @dev Validate if it’s the true owner of the Miner that sign. If yes, accept the Miner and transfer it into the contract and internally record that the Miner belongs to the current message sender.   
@@ -75,10 +77,10 @@ contract SPex {
     /// @param minerId Miner ID
     /// @param price Sale price
     function listMiner(CommonTypes.FilActorId minerId, uint256 price) public {
-        require(_contractMiners[minerId]==msg.sender, "You are not owner of miner");
+        address owner = _contractMiners[minerId];
+        require(owner==msg.sender, "You are not owner of miner");
         uint64 minerIdUint64 = CommonTypes.FilActorId.unwrap(_listMiners[minerId].id);
         require(minerIdUint64 == 0, "Miner already list");
-        address owner = _contractMiners[minerId];
         ListMiner memory miner = ListMiner ({
             id: minerId,
             seller: owner,
@@ -96,9 +98,10 @@ contract SPex {
         require(_contractMiners[minerId]==msg.sender, "You are not the owner of miner");
         uint64 minerIdUint64 = CommonTypes.FilActorId.unwrap(_listMiners[minerId].id);
         require(minerIdUint64 > 0, "Miner not list");
-        ListMiner memory miner = _listMiners[minerId];
-        miner.price = newPrice;
-        _listMiners[minerId] = miner;
+        //ListMiner memory miner = _listMiners[minerId];
+        //miner.price = newPrice;
+        //_listMiners[minerId] = miner;
+        _listMiners[minerId].price = newPrice;
         emit EventChangePrice(minerId, newPrice);
     }
 
@@ -110,6 +113,7 @@ contract SPex {
         require(minerIdUint64 == 0, "You must cancel list first");
         require(_contractMiners[minerId]==msg.sender, "You are not the owner of miner");
         MinerAPI.changeOwnerAddress(minerId, newOwner);
+        delete _contractMiners[minerId];
         emit EventMinerOutContract(minerId, newOwner);
     }
 
@@ -126,12 +130,14 @@ contract SPex {
     /// @dev Buy the Miner, buyer pay for the price and target the buyer as new owner of the Miner in the contract and transfer the money to seller. 
     /// @param minerId Miner ID
     function buyMiner(CommonTypes.FilActorId minerId) public payable {
-        uint64 minerIdUint64 = CommonTypes.FilActorId.unwrap(_listMiners[minerId].id);
-        ListMiner memory miner = _listMiners[minerId];
+        ListMiner storage miner = _listMiners[minerId];
+        uint64 minerIdUint64 = CommonTypes.FilActorId.unwrap(miner.id);
         require(minerIdUint64 > 0, "Miner not list");
         require(msg.value==miner.price, "Incorrent payment amount");
-        uint256 transactionFee = miner.price * _feeRate / _feeRateUnit;
-        uint256 toSellerAmount = (miner.price * (_feeRateUnit - _feeRate)) / _feeRateUnit;
+        uint256 transactionFee = miner.price * _feeRate / FEE_RATE_UNIT;
+        //uint256 toSellerAmount = (miner.price * (FEE_RATE_UNIT - _feeRate)) / FEE_RATE_UNIT;
+        uint256 toSellerAmount = msg.value - transactionFee;
+        //require(msg.value==transactionFee+toSellerAmount, "Incorrent");
         _feeTo.transfer(transactionFee);
         payable(miner.seller).transfer(toSellerAmount);
         delete _listMiners[minerId];
@@ -170,7 +176,7 @@ contract SPex {
     }
 
     function changeFeeRate(uint256 newFeeRate) public {
-        require(newFeeRate < _feeRateUnit, "The feeRate must less _feeRateUnit");
+        require(newFeeRate < FEE_RATE_UNIT, "The feeRate must less FEE_RATE_UNIT");
         require(msg.sender == _manager, "Must manager can change");
         _feeRate = newFeeRate;
     }
@@ -192,4 +198,3 @@ contract SPex {
         return _manager;
     }
 }
-
